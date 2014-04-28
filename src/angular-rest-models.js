@@ -296,20 +296,12 @@ angular.module( 'rest-models', [])
       // collection when they arrive. If `reset: true` is passed, the response
       // data will be passed through the `reset` method instead of `set`.
       fetch: function(options) {
-        console.log("HI........");
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
-        console.log("I am getting here");
-        console.log(this.url);
-        console.log(options);
         $http({
           method: 'GET',
           url: this.url
         });
-        console.log($http({
-          method: 'GET',
-          url: this.url
-        }));
         return $http({
           method: 'GET',
           url: this.url
@@ -436,7 +428,7 @@ angular.module( 'rest-models', [])
       this.attributes = {};
       if (options.collection) {this.collection = options.collection;}
       if (options.parse) {attrs = this.parse(attrs, options) || {};}
-      if (options.baseUrl) {this.baseUrl = options.baseUrl;}
+      if (options.urlRoot) {this.urlRoot = options.urlRoot;}
       attrs = _.defaults({}, attrs, _.result(this, 'defaults'));
       this.set(attrs, options);
       this.changed = {};

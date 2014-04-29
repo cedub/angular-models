@@ -638,6 +638,9 @@ angular.module( 'rest-models', [])
           return promise.then(function (response) {
             if (angular.isDefined(response.data.id)) {
               _this.set('id', response.data.id);
+              _.each(response.data, function (value, key) {
+                _this.set(key, value);
+              });
               if (angular.isDefined(_this.collection)) {
                 _this.collection._byId[response.data.id] = _this;
               }

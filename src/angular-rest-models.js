@@ -608,10 +608,7 @@ angular.module( 'rest-models', [])
       fetch: function(options) {
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
-        var _this = this;
-        return $http.get(this.url()).then(function (data) {
-          return _this.set(data.data);
-        });
+        return $http.get(this.url(), options);
       },
 
       // Set a hash of model attributes, and sync the model to the server.
@@ -635,23 +632,17 @@ angular.module( 'rest-models', [])
         if (this.isNew()) {
           var promise = $http.post(this.url(), this.toJSON()),
           _this = this;
-          return promise.then(function (response) {
+          promise.then(function (response) {
             if (angular.isDefined(response.data.id)) {
               _this.set('id', response.data.id);
-              _.each(response.data, function (value, key) {
-                _this.set(key, value);
-              });
               if (angular.isDefined(_this.collection)) {
                 _this.collection._byId[response.data.id] = _this;
               }
             }
-            return _this;
           });
+          return promise;
         } else {
-          var _this = this;
-          return $http.put(this.url(), this.toJSON()).then(function (response) {
-            return _this;
-          });
+          return $http.put(this.url(), this.toJSON());
         }
 
       },

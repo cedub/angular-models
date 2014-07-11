@@ -1,5 +1,5 @@
 angular.module( 'rest-models', [])
-  .service('RestCollection', ['RestModel', '$http', function (RestModel, $http) {
+  .service('RestCollection', ['RestModel', '$http', '$q', function (RestModel, $http, $q) {
     // Create local references to array methods we'll want to use later.
     var array = [];
     var push = array.push;
@@ -11,6 +11,7 @@ angular.module( 'rest-models', [])
       if (options.model) {this.model = options.model;}
       if (options.comparator !== void 0) {this.comparator = options.comparator;}
       if (options.url) {this.url = options.url;}
+      if (options.parse) {this.parse = options.parse};
       this._reset();
       this.initialize.apply(this, arguments);
       if (models) {this.reset(models, _.extend({silent: true}, options));}
@@ -298,14 +299,30 @@ angular.module( 'rest-models', [])
       fetch: function(options) {
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
-        $http({
-          method: 'GET',
-          url: this.url
-        });
-        return $http({
-          method: 'GET',
-          url: this.url
-        });
+        var _this = this;
+        if (options.refresh == true || !this.length) {
+          $http({
+            method: 'GET',
+            url: this.url
+          });
+          return $http({
+            method: 'GET',
+            url: this.url
+          }).then(function (response) {
+            if (response.data) {
+              _this.add(response.data, _.extend(options, {merge: true}));
+            }
+            return _this;
+          });
+        } else {
+          var deferred = $q.defer(),
+          promise = deferred.promise;
+          promise.then(function (data) {
+            return data;
+          });
+          deferred.resolve(_this);
+          return promise;
+        }
       },
 
       // Create a new instance of a model in this collection. Add the model to the
@@ -419,7 +436,7 @@ angular.module( 'rest-models', [])
 
     return RestCollection;
   }])
-  .service('RestModel', ['$http', function ($http) {
+  .service('RestModel', ['$http', '$q', function ($http, $q) {
 
     var RestModel = function(attributes, options) {
       var attrs = attributes || {};
@@ -609,9 +626,19 @@ angular.module( 'rest-models', [])
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
         var _this = this;
-        return $http.get(this.url()).then(function (data) {
-          return _this.set(data.data);
-        });
+        if (options.refresh == true || this.isNew()) {
+          return $http.get(this.url()).then(function (data) {
+            return _this.set(_this.parse(data.data, options));
+          });
+        } else {
+          var deferred = $q.defer(),
+          promise = deferred.promise;
+          promise.then(function (data) {
+            return data;
+          });
+          deferred.resolve(_this);
+          return promise;
+        }
       },
 
       // Set a hash of model attributes, and sync the model to the server.

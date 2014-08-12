@@ -310,6 +310,7 @@ angular.module( 'rest-models', [])
             url: this.url
           }).then(function (response) {
             if (response.data) {
+              _this.reset();
               _this.add(response.data, _.extend(options, {merge: true}));
             }
             return _this;

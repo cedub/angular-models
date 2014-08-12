@@ -1,5 +1,5 @@
 angular.module( 'rest-models', [])
-  .service('RestCollection', ['RestModel', '$http', function (RestModel, $http) {
+  .service('RestCollection', ['RestModel', '$http', '$q', function (RestModel, $http, $q) {
     // Create local references to array methods we'll want to use later.
     var array = [];
     var push = array.push;
@@ -11,6 +11,7 @@ angular.module( 'rest-models', [])
       if (options.model) {this.model = options.model;}
       if (options.comparator !== void 0) {this.comparator = options.comparator;}
       if (options.url) {this.url = options.url;}
+      if (options.parse) {this.parse = options.parse;}
       this._reset();
       this.initialize.apply(this, arguments);
       if (models) {this.reset(models, _.extend({silent: true}, options));}
@@ -84,7 +85,7 @@ angular.module( 'rest-models', [])
         var i, l, id, model, attrs, existing, sort;
         var at = options.at;
         var targetModel = this.model;
-        var sortable = this.comparator && (at == null) && options.sort !== false;
+        var sortable = this.comparator && (at === null) && options.sort !== false;
         var sortAttr = _.isString(this.comparator) ? this.comparator : null;
         var toAdd = [], toRemove = [], modelMap = {};
         var add = options.add, merge = options.merge, remove = options.remove;
@@ -134,7 +135,7 @@ angular.module( 'rest-models', [])
         if (toAdd.length || (order && order.length)) {
           if (sortable) {sort = true;}
           this.length += toAdd.length;
-          if (at != null) {
+          if (at !== null) {
             for (i = 0, l = toAdd.length; i < l; i++) {
               this.models.splice(at + i, 0, toAdd[i]);
             }
@@ -242,7 +243,7 @@ angular.module( 'rest-models', [])
 
       // Get a model from the set by id.
       get: function(obj) {
-        if (obj == null) {return void 0;}
+        if (obj === null) {return void 0;}
         return this._byId[obj] || this._byId[obj.id] || this._byId[obj.cid];
       },
 
@@ -298,14 +299,30 @@ angular.module( 'rest-models', [])
       fetch: function(options) {
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
-        $http({
-          method: 'GET',
-          url: this.url
-        });
-        return $http({
-          method: 'GET',
-          url: this.url
-        });
+        var _this = this;
+        if (options.refresh === true || !this.length) {
+          $http({
+            method: 'GET',
+            url: this.url
+          });
+          return $http({
+            method: 'GET',
+            url: this.url
+          }).then(function (response) {
+            if (response.data) {
+              _this.add(response.data, _.extend(options, {merge: true}));
+            }
+            return _this;
+          });
+        } else {
+          var deferred = $q.defer(),
+          promise = deferred.promise;
+          promise.then(function (data) {
+            return data;
+          });
+          deferred.resolve(_this);
+          return promise;
+        }
       },
 
       // Create a new instance of a model in this collection. Add the model to the
@@ -359,7 +376,7 @@ angular.module( 'rest-models', [])
       // Internal method to create a model's ties to a collection.
       _addReference: function(model, options) {
         this._byId[model.cid] = model;
-        if (model.id != null) {this._byId[model.id] = model;}
+        if (model.id !== null) {this._byId[model.id] = model;}
         if (!model.collection) {model.collection = this;}
         // model.on('all', this._onModelEvent, this);
       },
@@ -419,7 +436,7 @@ angular.module( 'rest-models', [])
 
     return RestCollection;
   }])
-  .service('RestModel', ['$http', function ($http) {
+  .service('RestModel', ['$http', '$q', function ($http, $q) {
 
     var RestModel = function(attributes, options) {
       var attrs = attributes || {};
@@ -474,7 +491,7 @@ angular.module( 'rest-models', [])
       // Returns `true` if the attribute contains a value that is not null
       // or undefined.
       has: function(attr) {
-        return this.get(attr) != null;
+        return this.get(attr) !== null;
       },
 
       // Set a hash of model attributes on the object. This is
@@ -482,7 +499,7 @@ angular.module( 'rest-models', [])
       // anyone who needs to know about the change in state. The heart of the beast.
       set: function(key, val, options) {
         var attr, attrs, unset, changes, silent, changing, prev, current;
-        if (key == null) {return this;}
+        if (key === null) {return this;}
 
         // Handle both `"key", value` and `{key: value}` -style arguments.
         if (typeof key === 'object') {
@@ -568,7 +585,7 @@ angular.module( 'rest-models', [])
       // Determine if the model has changed since the last `"change"` event.
       // If you specify an attribute name, determine if that attribute has changed.
       hasChanged: function(attr) {
-        if (attr == null) {return !_.isEmpty(this.changed);}
+        if (attr === null) {return !_.isEmpty(this.changed);}
         return _.has(this.changed, attr);
       },
 
@@ -592,7 +609,7 @@ angular.module( 'rest-models', [])
       // Get the previous value of an attribute, recorded at the time the last
       // `"change"` event was fired.
       previous: function(attr) {
-        if (attr == null || !this._previousAttributes) {return null;}
+        if (attr === null || !this._previousAttributes) {return null;}
         return this._previousAttributes[attr];
       },
 
@@ -608,17 +625,30 @@ angular.module( 'rest-models', [])
       fetch: function(options) {
         options = options ? _.clone(options) : {};
         if (options.parse === void 0) {options.parse = true;}
-        return $http.get(this.url(), options);
+        var _this = this;
+        if (options.refresh === true || this.isNew()) {
+          return $http.get(this.url()).then(function (data) {
+            return _this.set(_this.parse(data.data, options));
+          });
+        } else {
+          var deferred = $q.defer(),
+          promise = deferred.promise;
+          promise.then(function (data) {
+            return data;
+          });
+          deferred.resolve(_this);
+          return promise;
+        }
       },
 
       // Set a hash of model attributes, and sync the model to the server.
       // If the server returns an attributes hash that differs, the model's
       // state will be `set` again.
       save: function(key, val, options) {
-        var attrs, method, xhr, attributes = this.attributes;
+        var attrs, method, xhr, attributes = this.attributes, _this = this;
 
         // Handle both `"key", value` and `{key: value}` -style arguments.
-        if (key == null || typeof key === 'object') {
+        if (key === null || typeof key === 'object') {
           attrs = key;
           options = val;
         } else {
@@ -629,20 +659,25 @@ angular.module( 'rest-models', [])
 
         if (!this.set(attrs, options)) {return false;}
 
+
         if (this.isNew()) {
-          var promise = $http.post(this.url(), this.toJSON()),
-          _this = this;
-          promise.then(function (response) {
+          var promise = $http.post(this.url(), this.toJSON());
+          return promise.then(function (response) {
             if (angular.isDefined(response.data.id)) {
               _this.set('id', response.data.id);
+              _.each(response.data, function (value, key) {
+                _this.set(key, value);
+              });
               if (angular.isDefined(_this.collection)) {
                 _this.collection._byId[response.data.id] = _this;
               }
             }
+            return _this;
           });
-          return promise;
         } else {
-          return $http.put(this.url(), this.toJSON());
+          return $http.put(this.url(), this.toJSON()).then(function (response) {
+            return _this;
+          });
         }
 
       },
